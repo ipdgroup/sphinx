@@ -697,6 +697,7 @@ GROUPER_BEGIN_SPLIT ( CSphGrouperDay )
 GROUPER_END
 
 
+#if 0
 GROUPER_BEGIN_SPLIT ( CSphGrouperWeek )
 	int iPrevSunday = (1+tSplit.tm_yday) - tSplit.tm_wday; // prev Sunday day of year, base 1
 	int iYear = tSplit.tm_year+1900;
@@ -712,6 +713,11 @@ GROUPER_BEGIN_SPLIT ( CSphGrouperWeek )
 	}
 	return iYear*1000 + iPrevSunday;
 GROUPER_END
+#else
+GROUPER_BEGIN_SPLIT ( CSphGrouperWeek )  // CSphGrouperHour in fact.
+	return (tSplit.tm_year+1900)*1000000 + (1+tSplit.tm_mon)*10000 + tSplit.tm_mday*100 + tSplit.tm_hour;
+GROUPER_END
+#endif
 
 
 GROUPER_BEGIN_SPLIT ( CSphGrouperMonth )
