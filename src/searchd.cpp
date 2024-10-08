@@ -8293,7 +8293,7 @@ struct AggrResult_t : CSphQueryResult
 	CSphVector<int>					m_dMatchCounts;		///< aggregated resultsets lengths (for schema minimization)
 	CSphVector<const CSphIndex*>	m_dLockedAttrs;		///< indexes which are hold in the memory untill sending result
 	CSphTaggedVector				m_dTag2Pools;		///< tag to MVA and strings storage pools mapping
-	CSphString						m_sZeroCountName;
+	CSphVector<CSphString>			m_dZeroCount;
 
 	AggrResult_t()
 	{}
@@ -8747,7 +8747,7 @@ bool MinimizeAggrResult ( AggrResult_t & tRes, CSphQuery & tQuery, int iLocals, 
 		return false;
 	}
 
-	bool bReturnZeroCount = !tRes.m_sZeroCountName.IsEmpty();
+	bool bReturnZeroCount = ( tRes.m_dZeroCount.GetLength()!=0 );
 
 	// 0 matches via SphinxAPI? no fiddling with schemes is necessary
 	// (and via SphinxQL, we still need to return the right schema)
@@ -11270,11 +11270,8 @@ void SearchHandler_c::RunSubset ( int iStart, int iEnd )
 			{
 				ARRAY_FOREACH ( i, tQuery.m_dItems )
 				{
-					if ( tQuery.m_dItems[i].m_sExpr=="count(*)" )
-					{
-						tRes.m_sZeroCountName = tQuery.m_dItems[i].m_sAlias;
-						break;
-					}
+					if ( tQuery.m_dItems[i].m_sExpr=="count(*)" || ( tQuery.m_dItems[i].m_sExpr=="@distinct" ) )
+						tRes.m_dZeroCount.Add ( tQuery.m_dItems[i].m_sAlias );
 				}
 			}
 
@@ -12772,7 +12769,11 @@ void SqlParser_c::FreeNamedVec ( int )
 
 bool ParseSqlQuery ( const char * sQuery, int iLen, CSphVector<SqlStmt_t> & dStmt, CSphString & sError, ESphCollation eCollation )
 {
-	assert ( sQuery );
+	if ( !sQuery || !iLen )
+	{
+		sError = "query was empty";
+		return false;
+	}
 
 	SqlParser_c tParser ( dStmt, eCollation );
 	tParser.m_pBuf = sQuery;
@@ -14955,9 +14956,13 @@ enum MysqlColumnType_e
 	MYSQL_COL_STRING	= 254
 };
 
+enum MysqlColumnFlag_e
+{
+	MYSQL_COL_UNSIGNED_FLAG = 32
+};
 
 
-void SendMysqlFieldPacket ( NetOutputBuffer_c & tOut, BYTE uPacketID, const char * sCol, MysqlColumnType_e eType )
+void SendMysqlFieldPacket ( NetOutputBuffer_c & tOut, BYTE uPacketID, const char * sCol, MysqlColumnType_e eType, WORD uFlags=0 )
 {
 	const char * sDB = "";
 	const char * sTable = "";
@@ -14987,7 +14992,8 @@ void SendMysqlFieldPacket ( NetOutputBuffer_c & tOut, BYTE uPacketID, const char
 	tOut.SendByte ( 0 ); // charset_nr
 	tOut.SendLSBDword ( iColLen ); // length
 	tOut.SendByte ( BYTE(eType) ); // type (0=decimal)
-	tOut.SendWord ( 0 ); // flags
+	tOut.SendByte ( uFlags&255 );
+	tOut.SendByte ( uFlags>>8 );
 	tOut.SendByte ( 0 ); // decimals
 	tOut.SendWord ( 0 ); // filler
 }
@@ -15240,10 +15246,10 @@ public:
 	}
 
 	// add the next column. The EOF after the tull set will be fired automatically
-	inline void HeadColumn ( const char * sName, MysqlColumnType_e uType=MYSQL_COL_STRING )
+	inline void HeadColumn ( const char * sName, MysqlColumnType_e uType=MYSQL_COL_STRING, WORD uFlags=0 )
 	{
 		assert ( m_iSize>0 && "you try to send more mysql columns than declared in InitHead" );
-		SendMysqlFieldPacket ( m_tOut, m_uPacketID++, sName, uType );
+		SendMysqlFieldPacket ( m_tOut, m_uPacketID++, sName, uType, uFlags );
 		--m_iSize;
 	}
 
@@ -16822,15 +16828,17 @@ static void FormatFactors ( CSphVector<BYTE> & dOut, const unsigned int * pFacto
 }
 
 
-static void ReturnZeroCount ( const CSphRsetSchema & tSchema, int iAttrsCount, const CSphString & sName, SqlRowBuffer_c & dRows )
+static void ReturnZeroCount ( const CSphRsetSchema & tSchema, int iAttrsCount, const CSphVector<CSphString> & dCounts, SqlRowBuffer_c & dRows )
 {
 	for ( int i=0; i<iAttrsCount; i++ )
 	{
-		const CSphColumnInfo & tCol = tSchema.GetAttr(i);
+		const CSphColumnInfo & tCol = tSchema.GetAttr ( i );
 
-		if ( tCol.m_sName==sName ) // @count or its alias
+		// @count or its alias or count(distinct attr_name)
+		if ( dCounts.Contains ( tCol.m_sName ) )
+		{
 			dRows.PutNumeric<DWORD> ( "%u", 0 );
-		else
+		} else
 		{
 			// essentially the same as SELECT_DUAL, parse and print constant expressions
 			ESphAttr eAttrType;
@@ -16878,7 +16886,7 @@ void SendMysqlSelectResult ( SqlRowBuffer_c & dRows, const AggrResult_t & tRes, 
 	// bummer! lets protect ourselves against that
 	int iSchemaAttrsCount = 0;
 	int iAttrsCount = 1;
-	bool bReturnZeroCount = !tRes.m_sZeroCountName.IsEmpty();
+	bool bReturnZeroCount = ( tRes.m_dZeroCount.GetLength()!=0 );
 	if ( tRes.m_dMatches.GetLength() || bReturnZeroCount )
 	{
 		iSchemaAttrsCount = SendGetAttrCount ( tRes.m_tSchema );
@@ -16892,7 +16900,7 @@ void SendMysqlSelectResult ( SqlRowBuffer_c & dRows, const AggrResult_t & tRes, 
 	if ( !tRes.m_dMatches.GetLength() && !bReturnZeroCount )
 	{
 		// in case there are no matches, send a dummy schema
-		dRows.HeadColumn ( "id", USE_64BIT ? MYSQL_COL_LONGLONG : MYSQL_COL_LONG );
+		dRows.HeadColumn ( "id", USE_64BIT ? MYSQL_COL_LONGLONG : MYSQL_COL_LONG, MYSQL_COL_UNSIGNED_FLAG );
 	} else
 	{
 		for ( int i=0; i<iSchemaAttrsCount; i++ )
@@ -16907,7 +16915,7 @@ void SendMysqlSelectResult ( SqlRowBuffer_c & dRows, const AggrResult_t & tRes, 
 				eType = MYSQL_COL_LONGLONG;
 			if ( tCol.m_eAttrType==SPH_ATTR_STRING || tCol.m_eAttrType==SPH_ATTR_STRINGPTR || tCol.m_eAttrType==SPH_ATTR_FACTORS || tCol.m_eAttrType==SPH_ATTR_FACTORS_JSON )
 				eType = MYSQL_COL_STRING;
-			dRows.HeadColumn ( tCol.m_sName.cstr(), eType );
+			dRows.HeadColumn ( tCol.m_sName.cstr(), eType, tCol.m_sName=="id" ? MYSQL_COL_UNSIGNED_FLAG : 0 );
 		}
 	}
 
@@ -17140,7 +17148,7 @@ void SendMysqlSelectResult ( SqlRowBuffer_c & dRows, const AggrResult_t & tRes, 
 	}
 
 	if ( bReturnZeroCount )
-		ReturnZeroCount ( tRes.m_tSchema, iSchemaAttrsCount, tRes.m_sZeroCountName, dRows );
+		ReturnZeroCount ( tRes.m_tSchema, iSchemaAttrsCount, tRes.m_dZeroCount, dRows );
 
 	// eof packet
 	dRows.Eof ( bMoreResultsFollow, iWarns );
@@ -17452,6 +17460,15 @@ void HandleMysqlMultiStmt ( const CSphVector<SqlStmt_t> & dStmt, CSphQueryResult
 
 		// save meta for SHOW *
 		tLastMeta = bUseFirstMeta ? tHandler.m_dResults[0] : tHandler.m_dResults.Last();
+
+		// fix up overall query time
+		if ( bUseFirstMeta )
+			for ( int i=1; i<tHandler.m_dResults.GetLength(); i++ )
+			{
+				tLastMeta.m_iQueryTime += tHandler.m_dResults[i].m_iQueryTime;
+				tLastMeta.m_iCpuTime += tHandler.m_dResults[i].m_iCpuTime;
+				tLastMeta.m_iAgentCpuTime += tHandler.m_dResults[i].m_iAgentCpuTime;
+			}
 	}
 
 	if ( !bSearchOK )
@@ -17942,7 +17959,7 @@ void HandleMysqlShowCollations ( SqlRowBuffer_c & tOut )
 	tOut.HeadBegin(6);
 	tOut.HeadColumn ( "Collation" );
 	tOut.HeadColumn ( "Charset" );
-	tOut.HeadColumn ( "Id", MYSQL_COL_LONGLONG );
+	tOut.HeadColumn ( "Id", MYSQL_COL_LONGLONG, MYSQL_COL_UNSIGNED_FLAG );
 	tOut.HeadColumn ( "Default" );
 	tOut.HeadColumn ( "Compiled" );
 	tOut.HeadColumn ( "Sortlen" );
@@ -18121,6 +18138,7 @@ void DumpIndexSettings ( CSphStringBuilder & tBuf, CSphIndex * pIndex )
 	const CSphIndexSettings & tSettings = pIndex->GetSettings();
 	DumpKey ( tBuf, "docinfo",				"inline",								tSettings.m_eDocinfo==SPH_DOCINFO_INLINE );
 	DumpKey ( tBuf, "min_prefix_len",		tSettings.m_iMinPrefixLen,				tSettings.m_iMinPrefixLen!=0 );
+	DumpKey ( tBuf, "min_infix_len",		tSettings.m_iMinInfixLen,				tSettings.m_iMinInfixLen!=0 );
 	DumpKey ( tBuf, "max_substring_len",	tSettings.m_iMaxSubstringLen,			tSettings.m_iMaxSubstringLen!=0 );
 	DumpKey ( tBuf, "index_exact_words",	1,										tSettings.m_bIndexExactWords );
 	DumpKey ( tBuf, "html_strip",			1,										tSettings.m_bHtmlStrip );
@@ -18128,6 +18146,19 @@ void DumpIndexSettings ( CSphStringBuilder & tBuf, CSphIndex * pIndex )
 	DumpKey ( tBuf, "html_remove_elements", tSettings.m_sHtmlRemoveElements.cstr(), !tSettings.m_sHtmlRemoveElements.IsEmpty() );
 	DumpKey ( tBuf, "index_zones",			tSettings.m_sZones.cstr(),				!tSettings.m_sZones.IsEmpty() );
 	DumpKey ( tBuf, "index_field_lengths",	1,										tSettings.m_bIndexFieldLens );
+	DumpKey ( tBuf, "index_sp",				1,										tSettings.m_bIndexSP );
+	DumpKey ( tBuf, "phrase_boundary_step",	tSettings.m_iBoundaryStep,				tSettings.m_iBoundaryStep!=0 );
+	DumpKey ( tBuf, "stopword_step",		tSettings.m_iStopwordStep,				tSettings.m_iStopwordStep!=1 );
+	DumpKey ( tBuf, "overshort_step",		tSettings.m_iOvershortStep,				tSettings.m_iOvershortStep!=1 );
+	DumpKey ( tBuf, "bigram_index", sphBigramName ( tSettings.m_eBigramIndex ), tSettings.m_eBigramIndex!=SPH_BIGRAM_NONE );
+	DumpKey ( tBuf, "bigram_freq_words",	tSettings.m_sBigramWords.cstr(),		!tSettings.m_sBigramWords.IsEmpty() );
+	DumpKey ( tBuf, "rlp_context",			tSettings.m_sRLPContext.cstr(),			!tSettings.m_sRLPContext.IsEmpty() );
+	DumpKey ( tBuf, "index_token_filter",	tSettings.m_sIndexTokenFilter.cstr(),	!tSettings.m_sIndexTokenFilter.IsEmpty() );
+	CSphFieldFilterSettings tFieldFilter;
+	pIndex->GetFieldFilterSettings ( tFieldFilter );
+	ARRAY_FOREACH ( i, tFieldFilter.m_dRegexps )
+		DumpKey ( tBuf, "regexp_filter",	tFieldFilter.m_dRegexps[i].cstr(),		!tFieldFilter.m_dRegexps[i].IsEmpty() );
+
 
 	if ( pIndex->GetTokenizer() )
 	{
@@ -18157,6 +18188,7 @@ void DumpIndexSettings ( CSphStringBuilder & tBuf, CSphIndex * pIndex )
 		DumpKey ( tBuf, "stopwords",		tDictSettings.m_sStopwords.cstr (),		!tDictSettings.m_sStopwords.IsEmpty() );
 		DumpKey ( tBuf, "wordforms",		tWordforms.cstr()+1,					tDictSettings.m_dWordforms.GetLength()>0 );
 		DumpKey ( tBuf, "min_stemming_len",	tDictSettings.m_iMinStemmingLen,		tDictSettings.m_iMinStemmingLen>1 );
+		DumpKey ( tBuf, "stopwords_unstemmed", 1,									tDictSettings.m_bStopwordsUnstemmed );
 	}
 }
 
