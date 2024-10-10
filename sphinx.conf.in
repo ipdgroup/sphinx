@@ -271,7 +271,7 @@ source src1
 	# shell command to invoke xmlpipe stream producer
 	# mandatory
 	#
-	# xmlpipe_command		= cat @CONFDIR@/test.xml
+	# xmlpipe_command		= cat @localstatedir@/test.xml
 
 	# xmlpipe2 field declaration
 	# multi-value, optional, default is empty
@@ -338,7 +338,7 @@ index test1
 
 	# index files path and file name, without extension
 	# mandatory, path must be writable, extensions will be auto-appended
-	path			= @CONFDIR@/data/test1
+	path			= @localstatedir@/data/test1
 
 	# document attribute values (docinfo) storage mode
 	# optional, default is 'extern'
@@ -382,13 +382,13 @@ index test1
 	# optional, default is empty
 	# contents are plain text, charset_table and stemming are both applied
 	#
-	# stopwords		= @CONFDIR@/data/stopwords.txt
+	# stopwords		= @localstatedir@/data/stopwords.txt
 
 
 	# wordforms file, in "mapfrom > mapto" plain text format
 	# optional, default is empty
 	#
-	# wordforms		= @CONFDIR@/data/wordforms.txt
+	# wordforms		= @localstatedir@/data/wordforms.txt
 
 
 	# tokenizing exceptions file
@@ -397,7 +397,7 @@ index test1
 	# plain text, case sensitive, space insensitive in map-from part
 	# one "Map Several Words => ToASingleOne" entry per line
 	#
-	# exceptions		= @CONFDIR@/data/exceptions.txt
+	# exceptions		= @localstatedir@/data/exceptions.txt
 
 
 	# embedded file size limit
@@ -604,7 +604,7 @@ index test1
 	# snippet document file name prefix
 	# preprended to file names when generating snippets using load_files option
 	# WARNING, this is a prefix (not a path), trailing slash matters!
-	# optional, default is empty
+	# optional, default is current working directory of a running process
 	#
 	# snippets_file_prefix	= /mnt/mydocs/server1
 
@@ -628,7 +628,7 @@ index test1
 # and may then be overridden in this index definition
 index test1stemmed : test1
 {
-	path			= @CONFDIR@/data/test1stemmed
+	path			= @localstatedir@/data/test1stemmed
 	morphology		= stem_en
 }
 
@@ -708,7 +708,7 @@ index rt
 
 	# index files path and file name, without extension
 	# mandatory, path must be writable, extensions will be auto-appended
-	path			= @CONFDIR@/data/rt
+	path			= @localstatedir@/data/rt
 
 	# RAM chunk size limit
 	# RT index will keep at most this much data in RAM, then flush to disk
@@ -810,16 +810,16 @@ searchd
 	# listen			= 192.168.0.1:9312
 	# listen			= 9312
 	# listen			= /var/run/searchd.sock
-	listen			= 9312
-	listen			= 9306:mysql41
+	listen			= 127.0.0.1:9312
+	listen			= 127.0.0.1:9306:mysql41
 
 	# log file, searchd run info is logged here
 	# optional, default is 'searchd.log'
-	log			= @CONFDIR@/log/searchd.log
+	log			= /var/log/sphinxsearch/searchd.log
 
 	# query log file, all search queries are logged here
 	# optional, default is empty (do not log queries)
-	query_log		= @CONFDIR@/log/query.log
+	query_log		= /var/log/sphinxsearch/query.log
 
 	# client read timeout, seconds
 	# optional, default is 5
@@ -840,7 +840,7 @@ searchd
 
 	# PID file, searchd process ID file name
 	# mandatory
-	pid_file		= @CONFDIR@/log/searchd.pid
+	pid_file		= /run/sphinxsearch/searchd.pid
 
 	# seamless rotate, prevents rotate stalls if precaching huge datasets
 	# optional, default is 1
@@ -933,7 +933,7 @@ searchd
 	# optional, default is build-time configured data directory
 	#
 	# binlog_path		= # disable logging
-	# binlog_path		= @CONFDIR@/data # binlog.001 etc will be created there
+	# binlog_path		= @localstatedir@/data # binlog.001 etc will be created there
 
 
 	# binlog flush/sync mode
@@ -1042,7 +1042,7 @@ searchd
 
 	# a prefix to prepend to the local file names when creating snippets
 	# with load_files and/or load_files_scatter options
-	# optional, default is empty
+	# optional, default is current working directory of a running process
 	#
 	# snippets_file_prefix		= /mnt/common/server1/
 }

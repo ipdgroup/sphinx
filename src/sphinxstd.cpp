@@ -1119,11 +1119,13 @@ void * sphThreadInit ( bool )
 		bInit = true;
 	}
 #if !USE_WINDOWS
+#ifdef PTHREAD_STACK_MIN
 	if ( pthread_attr_setstacksize ( &tJoinableAttr, g_iThreadStackSize + PTHREAD_STACK_MIN ) )
 		sphDie ( "FATAL: pthread_attr_setstacksize( joinable ) failed" );
 
 	if ( pthread_attr_setstacksize ( &tDetachedAttr, g_iThreadStackSize + PTHREAD_STACK_MIN ) )
 		sphDie ( "FATAL: pthread_attr_setstacksize( detached ) failed" );
+#endif
 
 	return bDetached ? &tDetachedAttr : &tJoinableAttr;
 #else

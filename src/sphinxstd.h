@@ -2294,6 +2294,9 @@ int				sphOpenFile ( const char * sFile, CSphString & sError );
 /// return size of file descriptor
 int64_t			sphGetFileSize ( int iFD, CSphString & sError );
 
+// unwind different tricks like "../../../etc/passwd"
+CSphString		sphNormalizePath ( const CSphString& sOrigPath );
+CSphString		sphGetCwd();
 
 /// buffer trait that neither own buffer nor clean-up it on destroy
 template < typename T >

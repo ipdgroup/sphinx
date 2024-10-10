@@ -81,9 +81,11 @@
 	#include <io.h> // for open()
 
 	// workaround Windows quirks
+	#include <direct.h>
 	#define popen		_popen
 	#define pclose		_pclose
 	#define snprintf	_snprintf
+	#define getcwd          _getcwd
 	#define sphSeek		_lseeki64
 
 	#define stat		_stat64
@@ -12415,6 +12417,75 @@ static bool sphTruncate ( int iFD )
 #else
 	return ::ftruncate ( iFD, ::lseek ( iFD, 0, SEEK_CUR ) )==0;
 #endif
+}
+
+CSphString sphNormalizePath( const CSphString& sOrigPath )
+{
+	CSphVector<CSphString> dChunks;
+	const char* sBegin = sOrigPath.scstr();
+	const char* sEnd = sBegin + sOrigPath.Length();
+	const char* sPath = sBegin;
+	int iLevel = 0;
+
+	while ( sPath<sEnd )
+	{
+		const char* sSlash = ( char* ) memchr( sPath, '/', sEnd - sPath );
+		if ( !sSlash )
+			sSlash = sEnd;
+
+		auto iChunkLen = sSlash - sPath;
+
+		switch ( iChunkLen )
+		{
+		case 0: // empty chunk skipped
+			++sPath;
+			continue;
+		case 1: // simple dot chunk skipped
+			if ( *sPath=='.' )
+			{
+				sPath += 2;
+				continue;
+			}
+			break;
+		case 2: // double dot abandons chunks, then decrease level
+			if ( sPath[0]=='.' && sPath[1]=='.' )
+			{
+				if ( dChunks.GetLength() <= 0 )
+					--iLevel;
+				else
+					dChunks.Pop();
+				sPath += 3;
+				continue;
+			}
+		default: break;
+		}
+		CSphString temp( "" );
+		temp.SetBinary( sPath, iChunkLen );
+		dChunks.Add( temp );
+		sPath = sSlash + 1;
+	}
+
+	CSphStringBuilder sResult;
+	if ( *sBegin=='/' )
+		sResult += "/";
+	else
+		while ( iLevel++<0 )
+			dChunks.Insert(0, "..");
+
+	int i;
+	for ( i=0; i<dChunks.GetLength(); i++ ) {
+		sResult += dChunks[i].scstr();
+		if (i<dChunks.GetLength()-1)
+			sResult += "/";
+	}
+
+	return sResult.cstr();
+}
+
+CSphString sphGetCwd()
+{
+	CSphVector<char> sBuf (65536);
+	return getcwd( sBuf.Begin(), sBuf.GetLength());
 }
 
 class DeleteOnFail : public ISphNoncopyable
@@ -25880,7 +25951,7 @@ bool CSphFieldRegExps::AddRegExp ( const char * sRegExp, CSphString & sError )
 	tRegExp.m_sTo.Trim();
 
 	RE2::Options tOptions;
-	tOptions.set_utf8 ( true );
+	tOptions.set_encoding ( RE2::Options::Encoding::EncodingUTF8 );
 	tRegExp.m_pRE2 = new RE2 ( tRegExp.m_sFrom.cstr(), tOptions );
 
 	std::string sRE2Error;

@@ -13331,6 +13331,12 @@ bool MakeSnippets ( CSphString sIndex, CSphVector<ExcerptQuery_t> & dQueries, CS
 				struct stat st;
 				CSphString sFilename;
 				sFilename.SetSprintf ( "%s%s", g_sSnippetsFilePrefix.cstr(), dQueries[i].m_sSource.cstr() );
+				if ( !TestEscaping ( g_sSnippetsFilePrefix, sFilename ))
+				{
+					sError.SetSprintf( "File '%s' escapes '%s' scope",
+						sFilename.scstr(), g_sSnippetsFilePrefix.scstr());
+					return false;
+				}
 				if ( ::stat ( sFilename.cstr(), &st )<0 )
 				{
 					if ( !bScattered )
@@ -23054,13 +23060,14 @@ void ConfigureSearchd ( const CSphConfig & hConf, bool bOptPIDFile )
 
 	char sHandshake2[] =
 		"\x01\x00\x00\x00" // thread id
-		"\x01\x02\x03\x04\x05\x06\x07\x08" // scramble buffer (for auth)
+		"\x01\x02\x03\x04\x05\x06\x07\x08" // salt1 (for auth)
 		"\x00" // filler
 		"\x08\x82" // server capabilities; CLIENT_PROTOCOL_41 | CLIENT_CONNECT_WITH_DB | CLIENT_SECURE_CONNECTION
 		"\x21" // server language; let it be ut8_general_ci to make different clients happy
 		"\x02\x00" // server status
 		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" // filler
-		"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d"; // scramble buffer2 (for auth, 4.1+)
+		"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c" // salt2 (for auth, 4.1+)
+		"\x00"; // filler
 
 	const char * sVersion = hSearchd.GetStr ( "mysql_version_string", SPHINX_VERSION );
 	int iLen = strlen ( sVersion );
@@ -23751,7 +23758,7 @@ int WINAPI ServiceMain ( int argc, char **argv )
 	if ( hSearchd.Exists ( "snippets_file_prefix" ) )
 		g_sSnippetsFilePrefix = hSearchd["snippets_file_prefix"].cstr();
 	else
-		g_sSnippetsFilePrefix = "";
+		g_sSnippetsFilePrefix.SetSprintf("%s/", sphGetCwd().scstr());
 
 	const char* sLogFormat = hSearchd.GetStr ( "query_log_format", "plain" );
 	if ( !strcmp ( sLogFormat, "sphinxql" ) )

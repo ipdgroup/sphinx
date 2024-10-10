@@ -9,10 +9,10 @@ AC_DEFUN([AC_CHECK_MYSQL],[
 mysqlconfig_locations="mysql_config /usr/bin/mysql_config /usr/local/bin/mysql_config /usr/local/mysql/bin/mysql_config /opt/mysql/bin/mysql_config /usr/pkg/bin/mysql_config"
 user_mysql_includes=
 user_mysql_libs=
+mysqlconfig_used=
 
 # check explicit MySQL root for mysql_config, include, lib
-if test [ x$1 != xyes -a x$1 != xno ]
-then
+AS_IF([test x$1 != xyes -a x$1 != xno],[
 	mysqlroot=`echo $1 | sed -e 's+/$++'`
 	if test [ -x "$mysqlroot/bin/mysql_config" ]
 	then
@@ -41,9 +41,19 @@ then
 	else 
 		AC_MSG_ERROR([invalid MySQL root directory '$mysqlroot'; neither bin/mysql_config, nor include/ and lib/ were found there])
 	fi
-fi
+],[
+	PKG_CHECK_MODULES([MYSQL],[mysqlclient],[
+		MYSQL_PKGLIBDIR=`echo $MYSQL_LIBS | sed -e 's/-[[^L]][[^ ]]*//g;s/\s*-L//g;'`
+		mysqlconfig_used=yes
+	],[
+		PKG_CHECK_MODULES([MYSQL],[mariadb],[
+			MYSQL_PKGLIBDIR=`echo $MYSQL_LIBS | sed -e 's/-[[^L]][[^ ]]*//g;s/\s*-L//g;'`
+			mysqlconfig_used=yes
+		],[])
+	])
+])
 
-
+AS_IF([test "x$mysqlconfig_used" = x],[
 # try running mysql_config
 AC_MSG_CHECKING([for mysql_config])
 for mysqlconfig in $mysqlconfig_locations
@@ -68,11 +78,11 @@ do
 done
 if test [ -n "$mysqlconfig" ]
 then
-	mysqlconfig_used=
 	AC_MSG_RESULT([not found])
 else
 	mysqlconfig_used=yes
 fi
+])
 
 
 # if there's nothing from mysql_config, check well-known include paths
@@ -322,7 +332,7 @@ else
 includedirs="/usr/include /usr/include/libstemmer /usr/include/libstemmer_c"
 
 # possible libdirs -- 64bit first in case of multiarch environments
-libdirs="/usr/lib/x86_64-linux-gnu /usr/lib64 /usr/local/lib64 /usr/lib/i386-linux-gnu /usr/lib /usr/local/lib"
+libdirs="/usr/lib/$(/usr/bin/dpkg-architecture -qDEB_HOST_MULTIARCH) /usr/lib64 /usr/lib"
 
 # possible libnames -- shared one first, then static one
 libnames="stemmer stemmer_c"
@@ -397,8 +407,12 @@ AC_DEFUN([AC_CHECK_RE2],[
 LIBRE2_CFLAGS=
 LIBRE2_LIBS=
 
+PKG_CHECK_MODULES([LIBRE2], [re2], [], [
+
 # First check if include path was explicitly given.
 # If so, it has the maximum priority over any other possibilities
+
+
 
 if test [ -n "$ac_cv_use_re2" -a x$ac_cv_use_re2 != xyes]; then
        re2include=$ac_cv_use_re2
@@ -425,7 +439,7 @@ else
        re2includedirs="/usr/include /usr/include/re2"
 
 # Possible libraries paths
-       re2libdirs="/usr/lib/x86_64-linux-gnu /usr/lib64 /usr/local/lib64 /usr/lib/i386-linux-gnu /usr/lib /usr/local/lib"
+       re2libdirs="/usr/lib/$(/usr/bin/dpkg-architecture -qDEB_HOST_MULTIARCH) /usr/lib64 /usr/lib"
 
 
 # Trying to find installed header files
@@ -470,6 +484,7 @@ if test x$ac_cv_re2_libs != xno; then
        fi
 fi
 
+])
 
 # Now we either have re2, or not
 if test [ -z "$LIBRE2_LIBS" ]; then

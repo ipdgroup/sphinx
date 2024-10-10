@@ -16,4 +16,4 @@ EXTRA_DIST = api storage sphinx.conf.in sphinx-min.conf.in example.sql
 sysconf_DATA = sphinx.conf.dist sphinx-min.conf.dist example.sql
 
 install-data-hook:
-	mkdir -p $(DESTDIR)$(localstatedir)/data && mkdir -p $(DESTDIR)$(localstatedir)/log
+	mkdir -p $(DESTDIR)$(localstatedir)

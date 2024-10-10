@@ -81,6 +81,9 @@ struct XQQuery_t;
 void sphBuildExcerpt ( ExcerptQuery_t & tOptions, const CSphIndex * pIndex, const CSphHTMLStripper * pStripper, const XQQuery_t & tExtQuery,
 						DWORD eExtQuerySPZ, CSphString & sWarning, CSphString & sError, CSphDict * pDict, ISphTokenizer * pDocTokenizer, ISphTokenizer * pQueryTokenizer );
 
+// helper whether filepath from sPath does not escape area of sPrefix
+bool TestEscaping( const CSphString& sPrefix, const CSphString& sPath );
+
 #endif // _sphinxexcerpt_
 
 //

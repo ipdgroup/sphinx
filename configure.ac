@@ -8,7 +8,7 @@ dnl --------------------------------------------------------------------------
 SPHINX_CONFIGURE_PART([checking build environment])
 
 AC_CONFIG_AUX_DIR([config])
-AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 AM_MAINTAINER_MODE
 AC_CONFIG_SRCDIR([src/searchd.cpp])
 AC_CONFIG_HEADER([config/config.h])
@@ -67,6 +67,7 @@ fi
 AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_RANLIB
+AM_PROG_AR
 
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 #ifdef __GNUC__
@@ -343,31 +344,30 @@ AC_ARG_WITH([static-mysql],
 )
 
 AC_MSG_CHECKING([whether to compile with MySQL support])
-if test  x$ac_cv_use_static_mysql != xno -o x$ac_cv_use_mysql != xno
-then
+AS_IF([test x$ac_cv_use_static_mysql != xno -o x$ac_cv_use_mysql != xno],[
 	dl_mysql=0
-	if test x$ac_cv_use_static_mysql != xno ; then
+	AS_IF([test x$ac_cv_use_static_mysql != xno],[
 		AC_MSG_RESULT([static])
     	AC_CHECK_MYSQL([$ac_cv_use_static_mysql])
 		MYSQL_LIBS=`echo $MYSQL_LIBS | sed -e "sX-lmysqlclientX\$MYSQL_PKGLIBDIR/libmysqlclient.aXg"`
-	else
-		if test x$sph_usedl == xyes ; then
+	],[
+		AS_IF([test x$sph_usedl == xyes],[
 			AC_MSG_RESULT([runtime dynamic])
 			AC_CHECK_MYSQL([$ac_cv_use_mysql])
 			MYSQL_LIBS=""
 			dl_mysql=1
-		else
+		],[
 			AC_MSG_RESULT([dynamic])
 			AC_CHECK_MYSQL([$ac_cv_use_mysql])
-		fi
-	fi
+		])
+	])
     AC_DEFINE(USE_MYSQL,1,[Define to 1 if you want to compile with MySQL support])
 	AC_DEFINE_UNQUOTED(DL_MYSQL,$dl_mysql,[Define to 1 if you want runtime load mysql using dlopen])
     AC_SUBST([MYSQL_LIBS])
     AC_SUBST([MYSQL_CFLAGS])
-else
+],[
 	AC_MSG_RESULT([no])
-fi
+])
 AM_CONDITIONAL(USE_MYSQL, test x$ac_cv_use_mysql != xno -o x$ac_cv_use_static_mysql != xno )
 
 dnl ---

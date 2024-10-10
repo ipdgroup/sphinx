@@ -24,7 +24,7 @@ source src1
 index test1
 {
 	source			= src1
-	path			= @CONFDIR@/data/test1
+	path			= @localstatedir@/data/test1
 }
 
 
@@ -33,7 +33,7 @@ index testrt
 	type			= rt
 	rt_mem_limit		= 128M
 
-	path			= @CONFDIR@/data/testrt
+	path			= @localstatedir@/data/testrt
 
 	rt_field		= title
 	rt_field		= content
@@ -49,16 +49,16 @@ indexer
 
 searchd
 {
-	listen			= 9312
-	listen			= 9306:mysql41
-	log			= @CONFDIR@/log/searchd.log
-	query_log		= @CONFDIR@/log/query.log
+	listen			= 127.0.0.1:9312
+	listen			= 127.0.0.1:9306:mysql41
+	log			= /var/log/sphinxsearch/searchd.log
+	query_log		= /var/log/sphinxsearch/query.log
 	read_timeout		= 5
 	max_children		= 30
-	pid_file		= @CONFDIR@/log/searchd.pid
+	pid_file		= /run/sphinxsearch/searchd.pid
 	seamless_rotate		= 1
 	preopen_indexes		= 1
 	unlink_old		= 1
 	workers			= threads # for RT to work
-	binlog_path		= @CONFDIR@/data
+	binlog_path		= @localstatedir@/data
 }
