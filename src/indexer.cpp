@@ -1828,7 +1828,12 @@ int main ( int argc, char ** argv )
 	if ( !hConf ( "source" ) )
 		sphDie ( "no indexes found in config file '%s'", sOptConfig );
 
-	sphCheckDuplicatePaths ( hConf );
+	// Indexes with same tables but different sources are valid use case,
+	// so disable the duplicate check unless someone wants to index everything.
+	if ( bIndexAll )
+	{
+		sphCheckDuplicatePaths ( hConf );
+	}
 
 	if ( hConf("indexer") && hConf["indexer"]("indexer") )
 	{
